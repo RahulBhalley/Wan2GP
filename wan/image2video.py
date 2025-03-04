@@ -134,6 +134,7 @@ class WanI2V:
     def generate(self,
                 input_prompt,
                 img,
+                end_img=None,
                 max_area=720 * 1280,
                 frame_num=81,
                 shift=5.0,
@@ -156,6 +157,8 @@ class WanI2V:
                 Text prompt for content generation.
             img (PIL.Image.Image):
                 Input image tensor. Shape: [3, H, W]
+            end_img (PIL.Image.Image, *optional*):
+                End image tensor. Shape: [3, H, W]
             max_area (`int`, *optional*, defaults to 720*1280):
                 Maximum pixel area for latent space calculation. Controls video resolution scaling
             frame_num (`int`, *optional*, defaults to 81):
@@ -215,11 +218,17 @@ class WanI2V:
             device=self.device)
 
         msk = torch.ones(1, frame_num, lat_h, lat_w, device=self.device)
-        msk[:, 1:] = 0
+        msk[:, 1:-1] = 0  # Middle frames unconditioned
+        if end_img is not None:
+            end_img = TF.to_tensor(end_img).sub_(0.5).div_(0.5).to(self.device)
+            msk[:, -1] = 1  # Condition on end frame
+        else:
+            msk[:, -1] = 0  # No end frame conditioning
+            
         msk = torch.concat([
-            torch.repeat_interleave(msk[:, 0:1], repeats=4, dim=1), msk[:, 1:]
-        ],
-                           dim=1)
+            torch.repeat_interleave(msk[:, 0:1], repeats=4, dim=1), 
+            msk[:, 1:]
+        ], dim=1)
         msk = msk.view(1, msk.shape[1] // 4, 4, lat_h, lat_w)
         msk = msk.transpose(1, 2)[0]
 
@@ -247,12 +256,21 @@ class WanI2V:
         from mmgp import offload
 
         offload.last_offload_obj.unload_all()
-        enc= torch.concat([
-            torch.nn.functional.interpolate(
-                img[None].cpu(), size=(h, w), mode='bicubic').transpose(
-                    0, 1).to(torch.bfloat16),
-            torch.zeros(3, frame_num-1, h, w, device="cpu", dtype= torch.bfloat16)
-        ], dim=1).to(self.device)
+        if end_img is not None:
+            end_enc = torch.nn.functional.interpolate(
+                end_img[None].cpu(), size=(h, w), mode='bicubic').transpose(0, 1).to(torch.bfloat16)
+            enc = torch.concat([
+                torch.nn.functional.interpolate(
+                    img[None].cpu(), size=(h, w), mode='bicubic').transpose(0, 1).to(torch.bfloat16),
+                torch.zeros(3, frame_num-2, h, w, device="cpu", dtype=torch.bfloat16),
+                end_enc
+            ], dim=1).to(self.device)
+        else:
+            enc = torch.concat([
+                torch.nn.functional.interpolate(
+                    img[None].cpu(), size=(h, w), mode='bicubic').transpose(0, 1).to(torch.bfloat16),
+                torch.zeros(3, frame_num-1, h, w, device="cpu", dtype=torch.bfloat16)
+            ], dim=1).to(self.device)
         # enc = None
 
         y = self.vae.encode([enc], VAE_tile_size)[0]

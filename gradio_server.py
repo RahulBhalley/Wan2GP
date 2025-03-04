@@ -663,8 +663,8 @@ def generate_video(
     max_frames,
     RIFLEx_setting,
     state,
-    progress=gr.Progress() #track_tqdm= True
-
+    end_image,
+    progress=gr.Progress()
 ):
     
     from PIL import Image
@@ -854,6 +854,7 @@ def generate_video(
                     samples = wan_model.generate(
                         prompt,
                         image_to_continue[video_no-1],
+                        end_img=end_image[video_no-1] if end_image is not None and isinstance(end_image, list) else end_image,
                         frame_num=(video_length // 4)* 4 + 1,
                         max_area=MAX_AREA_CONFIGS[resolution], 
                         shift=flow_shift,
@@ -1161,15 +1162,14 @@ def create_demo():
                 video_to_continue = gr.Video(label= "Video to continue", visible= use_image2video and False) #######
                 if args.multiple_images:  
                     image_to_continue = gr.Gallery(
-                            label="Images as a starting point for new videos", type ="pil", #file_types= "image", 
+                            label="Starting image(s) for new videos", type ="pil", #file_types= "image", 
+                            columns=[3], rows=[1], object_fit="contain", height="auto", selected_index=0, interactive= True, visible=use_image2video)
+                    end_image = gr.Gallery(
+                            label="End image(s) for videos (optional)", type ="pil",
                             columns=[3], rows=[1], object_fit="contain", height="auto", selected_index=0, interactive= True, visible=use_image2video)
                 else:
-                    image_to_continue = gr.Image(label= "Image as a starting point for a new video", visible=use_image2video)
-
-                if use_image2video:
-                    prompt = gr.Textbox(label="Prompts (multiple prompts separated by carriage returns will generate multiple videos)", value="Several giant wooly mammoths approach treading through a snowy meadow, their long wooly fur lightly blows in the wind as they walk, snow covered trees and dramatic snow capped mountains in the distance, mid afternoon light with wispy clouds and a sun high in the distance creates a warm glow, the low camera view is stunning capturing the large furry mammal with beautiful photography, depth of field.", lines=3)
-                else:
-                    prompt = gr.Textbox(label="Prompts (multiple prompts separated by carriage returns will generate multiple videos)", value="A large orange octopus is seen resting on the bottom of the ocean floor, blending in with the sandy and rocky terrain. Its tentacles are spread out around its body, and its eyes are closed. The octopus is unaware of a king crab that is crawling towards it from behind a rock, its claws raised and ready to attack. The crab is brown and spiny, with long legs and antennae. The scene is captured from a wide angle, showing the vastness and depth of the ocean. The water is clear and blue, with rays of sunlight filtering through. The shot is sharp and crisp, with a high dynamic range. The octopus and the crab are in focus, while the background is slightly blurred, creating a depth of field effect.", lines=3)
+                    image_to_continue = gr.Image(label= "Starting image for video", visible=use_image2video)
+                    end_image = gr.Image(label= "End image for video (optional)", visible=use_image2video)
 
                     
                 with gr.Row():
@@ -1313,10 +1313,10 @@ def create_demo():
                 video_to_continue,
                 max_frames,
                 RIFLEx_setting,
-                state
+                state,
+                end_image
             ],
-            outputs= [gen_status] #,state 
-
+            outputs= [gen_status]
         ).then( 
             finalize_gallery,
             [state], 
