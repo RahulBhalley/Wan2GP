@@ -1156,6 +1156,7 @@ def create_demo():
                 msg = gr.Markdown()            
                 apply_btn  = gr.Button("Apply Changes")
 
+                prompt = gr.Textbox(label="Prompt", placeholder="Enter your prompt here...", visible=not use_image2video)
 
         with gr.Row():
             with gr.Column():
@@ -1171,6 +1172,7 @@ def create_demo():
                     image_to_continue = gr.Image(label= "Starting image for video", visible=use_image2video)
                     end_image = gr.Image(label= "End image for video (optional)", visible=use_image2video)
 
+                prompt = gr.Textbox(label="Prompt", placeholder="Enter your prompt here...", visible=not use_image2video)
                     
                 with gr.Row():
                     if use_image2video:
